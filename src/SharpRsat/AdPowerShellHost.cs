@@ -223,9 +223,15 @@ namespace SharpRsat
             }
         }
 
+        /// <summary>
+        /// Binds CLI tokens to the cmdlet. Consecutive non-named tokens are joined with a
+        /// single space so values like Domain Admins still work when an upstream loader
+        /// (e.g. Sliver execute-assembly) splits on spaces and drops quotes.
+        /// </summary>
         private static void ApplyArguments(PowerShell ps, string[] args, int startIndex)
         {
-            for (int i = startIndex; i < args.Length; i++)
+            int i = startIndex;
+            while (i < args.Length)
             {
                 string token = args[i];
                 if (IsNamedParameter(token))
@@ -236,29 +242,121 @@ namespace SharpRsat
                         throw new ArgumentException("Invalid parameter token: " + token);
                     }
 
-                    if (i + 1 < args.Length && !IsNamedParameter(args[i + 1]))
+                    i++;
+                    string value;
+                    int consumed = TakeJoinedValue(args, i, out value);
+                    if (consumed == 0)
                     {
-                        ps.AddParameter(name, args[i + 1]);
-                        i++;
+                        ps.AddParameter(name, true);
                     }
                     else
                     {
-                        ps.AddParameter(name, true);
+                        ps.AddParameter(name, value);
+                        i += consumed;
                     }
                 }
                 else
                 {
-                    ps.AddArgument(token);
+                    string value;
+                    int consumed = TakeJoinedValue(args, i, out value);
+                    if (consumed == 0)
+                    {
+                        throw new ArgumentException("Unexpected empty argument at index " + i + ".");
+                    }
+
+                    ps.AddArgument(value);
+                    i += consumed;
                 }
             }
         }
 
+        /// <summary>
+        /// Joins consecutive non-named tokens from <paramref name="startIndex"/> with spaces.
+        /// Returns how many tokens were consumed (0 if none / next token is named).
+        /// </summary>
+        private static int TakeJoinedValue(string[] args, int startIndex, out string value)
+        {
+            value = null;
+            if (startIndex >= args.Length || IsNamedParameter(args[startIndex]))
+            {
+                return 0;
+            }
+
+            var parts = new List<string>();
+            int i = startIndex;
+            while (i < args.Length && !IsNamedParameter(args[i]))
+            {
+                parts.Add(StripWrappingQuotes(args[i]));
+                i++;
+            }
+
+            value = string.Join(" ", parts.ToArray());
+            return parts.Count;
+        }
+
+        private static string StripWrappingQuotes(string token)
+        {
+            if (string.IsNullOrEmpty(token) || token.Length < 2)
+            {
+                return token;
+            }
+
+            char first = token[0];
+            char last = token[token.Length - 1];
+            if ((first == '"' && last == '"') || (first == '\'' && last == '\''))
+            {
+                return token.Substring(1, token.Length - 2);
+            }
+
+            return token;
+        }
+
         private static bool IsNamedParameter(string token)
         {
-            return !string.IsNullOrEmpty(token)
-                && token[0] == '-'
-                && token.Length > 1
-                && !char.IsDigit(token[1]);
+            if (string.IsNullOrEmpty(token)
+                || token[0] != '-'
+                || token.Length <= 1
+                || char.IsDigit(token[1]))
+            {
+                return false;
+            }
+
+            // PowerShell comparison/logical operators inside -Filter values (e.g. Name -eq foo)
+            // must not be treated as cmdlet parameter names when quotes were stripped upstream.
+            string name = token.TrimStart('-');
+            return !IsPowerShellOperatorName(name);
+        }
+
+        private static bool IsPowerShellOperatorName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return false;
+            }
+
+            return string.Equals(name, "eq", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "ne", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "gt", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "ge", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "lt", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "le", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "like", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "notlike", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "match", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "notmatch", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "contains", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "notcontains", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "in", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "notin", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "and", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "or", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "not", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "xor", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "bor", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "band", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "bnot", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "is", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "isnot", StringComparison.OrdinalIgnoreCase);
         }
 
         private static HashSet<string> BuildWhitelist(PSObject module)

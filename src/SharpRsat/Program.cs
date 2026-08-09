@@ -136,6 +136,7 @@ namespace SharpRsat
             writer.WriteLine("  SharpRsat.exe Get-ADUser support");
             writer.WriteLine("  SharpRsat.exe Get-ADUser -Identity support -Properties *");
             writer.WriteLine("  SharpRsat.exe Get-ADGroupMember \"Domain Admins\"");
+            writer.WriteLine("  SharpRsat.exe Get-ADGroupMember -Identity Domain Admins");
             writer.WriteLine();
             writer.WriteLine("Examples (recon):");
             writer.WriteLine("  SharpRsat.exe recon list");

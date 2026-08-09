@@ -54,7 +54,10 @@ SharpRsat.exe -h
 SharpRsat.exe Get-ADUser support
 SharpRsat.exe Get-ADUser -Identity support -Properties *
 SharpRsat.exe Get-ADGroupMember "Domain Admins"
+SharpRsat.exe Get-ADGroupMember -Identity Domain Admins
 ```
+
+连续的非命名 token 会按空格拼成一个参数值（兼容 Sliver `execute-assembly` 等会拆掉引号的加载方式）。查询 Domain Admins 也可直接用预设：`da` / `domain-admins`。
 
 结果经 `Out-String` 输出到 stdout；错误写 stderr，失败返回非 0。
 
