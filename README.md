@@ -88,18 +88,48 @@ SharpRsat.exe da
 | `enterprise-admins` (`ea`) | Enterprise Admins 成员（递归） |
 | `schema-admins` | Schema Admins 成员（递归） |
 | `account-operators` | Account Operators 成员（递归） |
+| `backup-operators` (`bo`) | Backup Operators 成员（递归） |
+| `server-operators` | Server Operators 成员（递归） |
+| `print-operators` | Print Operators 成员（递归） |
+| `dns-admins` | DnsAdmins 成员（递归） |
+| `gpo-creators` | Group Policy Creator Owners 成员（递归） |
+| `builtin-admins` | 内置 Administrators 成员（递归） |
+| `protected-users` | Protected Users 成员（递归） |
 | `admincount` | `adminCount=1` 账户 |
+| `fsmo` | FSMO 角色持有者 |
+| `sites` | AD 站点 |
+| `subnets` | AD 子网 |
+| `rodc` | 只读域控 |
+| `maq` | 域 `ms-DS-MachineAccountQuota` |
 | `kerberoast` | 可 Kerberoast 用户（含 SPN，排除 krbtgt） |
 | `asreproast` | 可 AS-REP Roast 用户（不要求预身份验证） |
 | `spn` | 带 SPN 的目录对象 |
+| `krbtgt` | krbtgt 账户（`PasswordLastSet` 等） |
+| `gmsa` | 托管/组托管服务账户 |
 | `unconstrained` | 非约束委派（用户 + 计算机） |
 | `constrained` | 约束委派（`msDS-AllowedToDelegateTo`） |
 | `rbcd` | 基于资源的约束委派 |
+| `trusted-to-auth` (`t2a`) | 协议转换委派（`TrustedToAuthForDelegation`） |
 | `pass-never-expires` (`dont-expire`) | 密码永不过期 |
 | `pass-not-required` | 允许空密码 |
+| `reversible` | 允许可逆密码加密 |
+| `des-only` | 仅 DES Kerberos 密钥的账户 |
+| `sid-history` | 带 `SIDHistory` 的主体 |
+| `disabled-users` | 已禁用用户 |
+| `locked-users` (`locked`) | 当前被锁定的用户 |
+| `inactive-users` | 启用且 90 天未登录（或从未登录）的用户 |
+| `stale-computers` | 启用且 90 天未登录（或从未登录）的计算机 |
 | `desc-users` | 描述字段非空用户（常泄密） |
+| `info-users` | Notes/`info` 字段非空用户 |
+| `scriptpath` | 配置了登录脚本路径的用户 |
 | `gpos` | GPO 容器对象 |
+| `fine-grained-pwd` (`fgpp`) | 细粒度密码策略（PSO） |
+| `laps` | 已配置 LAPS 过期时间的计算机（不导出密码） |
+| `bitlocker` | BitLocker 恢复信息对象（仅元数据） |
+| `foreign-principals` (`fsp`) | 外来安全主体 |
 | `server-computers` | OS 名称含 Server 的计算机 |
+| `workstations` | 启用且 OS 不含 Server 的计算机 |
+| `legacy-os` | 遗留操作系统计算机（XP/7/2008/2012 等） |
 
 ## 管理员权限与域环境
 
