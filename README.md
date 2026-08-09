@@ -89,6 +89,13 @@ SharpRsat.exe Get-ADUser -Filter "SamAccountName -eq 'support'" --max-results 20
 SharpRsat.exe --install-rsat Get-ADDomain
 ```
 
+通过 Sliver `execute-assembly` 等加载器时，推荐把数值写在同一 token 里，避免参数被拆坏：
+
+```text
+execute-assembly sharprsat.exe -p notepad.exe -- recon dns-records --quiet --delay=5000
+execute-assembly sharprsat.exe -p notepad.exe -- recon dns-records --quiet --delay5000
+```
+
 ## 侦察预设（recon）
 
 全部为只读 `Get-AD*` / LDAP 查询，不包含改密、加组等写操作。
