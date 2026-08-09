@@ -101,6 +101,8 @@ SharpRsat.exe da
 | `subnets` | AD 子网 |
 | `rodc` | 只读域控 |
 | `maq` | 域 `ms-DS-MachineAccountQuota` |
+| `dns` (`dns-zones`) | AD 集成 DNS 区域 + 域控 DNS 端点 |
+| `dns-records` | AD 集成 DNS 节点名（非墓碑；不解码二进制 RR） |
 | `kerberoast` | 可 Kerberoast 用户（含 SPN，排除 krbtgt） |
 | `asreproast` | 可 AS-REP Roast 用户（不要求预身份验证） |
 | `spn` | 带 SPN 的目录对象 |

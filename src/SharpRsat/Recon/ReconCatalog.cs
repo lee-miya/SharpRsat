@@ -263,6 +263,17 @@ namespace SharpRsat.Recon
                 "(Get-ADObject -Identity (Get-ADDomain).DistinguishedName -Properties 'ms-DS-MachineAccountQuota') | Select-Object DistinguishedName,@{n='MachineAccountQuota';e={$_.'ms-DS-MachineAccountQuota'}}"));
 
             list.Add(new ReconCommand(
+                "dns",
+                "AD-integrated DNS zones and domain controller DNS endpoints",
+                "$domain = Get-ADDomain; $forestRootDn = (Get-ADDomain -Identity (Get-ADForest).RootDomain).DistinguishedName; Write-Output '=== DNS endpoints (domain controllers) ==='; Get-ADDomainController -Filter * | Select-Object Name,HostName,IPv4Address,Site,Domain; Write-Output ''; Write-Output ('=== AD-integrated DNS zones (DNSRoot={0}) ===' -f $domain.DNSRoot); $bases = @(('DC=DomainDnsZones,{0}' -f $domain.DistinguishedName), ('DC=ForestDnsZones,{0}' -f $forestRootDn), ('CN=MicrosoftDNS,CN=System,{0}' -f $domain.DistinguishedName); foreach ($searchBase in $bases) { Get-ADObject -SearchBase $searchBase -LDAPFilter '(objectClass=dnsZone)' -SearchScope Subtree -Properties Name,whenCreated,whenChanged,DistinguishedName -ErrorAction SilentlyContinue | Select-Object Name,@{n='SearchBase';e={$searchBase}},whenCreated,whenChanged,DistinguishedName }",
+                "dns-zones"));
+
+            list.Add(new ReconCommand(
+                "dns-records",
+                "AD-integrated DNS node names (non-tombstoned; no binary RR decode)",
+                "$domain = Get-ADDomain; $forestRootDn = (Get-ADDomain -Identity (Get-ADForest).RootDomain).DistinguishedName; $bases = @(('DC=DomainDnsZones,{0}' -f $domain.DistinguishedName), ('DC=ForestDnsZones,{0}' -f $forestRootDn), ('CN=MicrosoftDNS,CN=System,{0}' -f $domain.DistinguishedName); foreach ($searchBase in $bases) { Get-ADObject -SearchBase $searchBase -LDAPFilter '(&(objectClass=dnsNode)(!(dNSTombstoned=TRUE)))' -SearchScope Subtree -Properties Name,whenChanged,DistinguishedName -ErrorAction SilentlyContinue | Select-Object Name,@{n='SearchBase';e={$searchBase}},whenChanged,DistinguishedName }"));
+
+            list.Add(new ReconCommand(
                 "kerberoast",
                 "Users with SPN (Kerberoastable), excluding krbtgt",
                 "Get-ADUser -LDAPFilter '(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*)(!(sAMAccountName=krbtgt)))' -Properties SamAccountName,servicePrincipalName,PasswordLastSet,Enabled,DistinguishedName | Select-Object SamAccountName,servicePrincipalName,PasswordLastSet,Enabled,DistinguishedName"));
