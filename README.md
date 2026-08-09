@@ -1,6 +1,6 @@
 # SharpRsat
 
-基于 RSAT **ActiveDirectory** 模块的 AD PowerShell 透传 CLI，并内置红队常用只读侦察预设。
+基于 RSAT **ActiveDirectory** 模块的 AD PowerShell 透传 CLI，并内置常用只读目录侦察预设。
 
 - **目标框架**：.NET Framework 4.8（x64）
 - **宿主**：进程内 `System.Management.Automation` Runspace（Windows PowerShell 5.1）
@@ -12,7 +12,7 @@
 | 操作系统 | Windows（Client 或 Server） |
 | 运行时 | .NET Framework 4.8 |
 | PowerShell | Windows PowerShell 5.1（系统自带即可） |
-| RSAT AD | 缺失时程序会尝试自动安装（需**管理员**权限） |
+| RSAT AD | 需本机已有 `ActiveDirectory` 模块；缺失时仅在显式 `--install-rsat` 时安装（需**管理员**） |
 | 目录查询 | 需能连通域控，并以有权限的**域凭据**运行 |
 
 ## 构建
@@ -37,29 +37,57 @@ SharpRsat.exe -list
 SharpRsat.exe -h
 ```
 
+全局标志（可出现在命令行任意位置，解析后剥离）：
+
+| 标志 | 默认 | 作用 |
+| --- | --- | --- |
+| `--install-rsat` | 关 | 模块缺失时才允许安装 RSAT AD PowerShell |
+| `--allow-write` | 关 | 放行非只读 AD cmdlet（`Set-` / `New-` / `Add-` 等） |
+| `--quiet` / `-q` | 关 | 短帮助/仅预设名列表；抑制安装进度输出 |
+| `--delay <ms>` | `0` | 每次 PowerShell 调用前休眠（上限 60000） |
+| `--max-results <n>` | `0` | 截断写入 stdout 的对象数（`0` = 不限） |
+
 路由规则：
 
-1. `args[0]` 为 `recon` → `args[1]` 为预设名（缺省或 `list` 则列出预设）
+1. 剥离全局标志后，`args[0]` 为 `recon` → `args[1]` 为预设名（缺省或 `list` 则列出预设）
 2. `args[0]` 直接匹配预设名/别名（如 `kerberoast`、`da`）→ 执行预设
-3. 否则按 ActiveDirectory 模块导出命令白名单透传
+3. 否则按 ActiveDirectory 模块导出命令白名单透传（默认只读动词）
 4. 非 AD cmdlet（如 `Get-Process`）会被拒绝
 
-`-list` / `recon` / `recon list` 仅列出预设，**不**触发 RSAT 安装。
+`-list` / `recon` / `recon list` 仅列出预设，**不**触发 RSAT 安装或模块导入。
 
 ## AD 透传
 
-对 `ActiveDirectory` 模块已导出的 cmdlet 做白名单校验后动态调用，支持命名参数与位置参数。
+对 `ActiveDirectory` 模块已导出的 cmdlet 做白名单校验后动态调用，支持命名参数与位置参数。  
+**默认只读**：允许 `Get-` / `Search-` / `Measure-` / `Test-` / `Find-` 前缀及 `Sync-ADObject`；其它 cmdlet 需 `--allow-write`。
 
 ```text
 SharpRsat.exe Get-ADUser support
 SharpRsat.exe Get-ADUser -Identity support -Properties *
 SharpRsat.exe Get-ADGroupMember "Domain Admins"
 SharpRsat.exe Get-ADGroupMember -Identity Domain Admins
+SharpRsat.exe --allow-write Set-ADUser -Identity support -Description test
 ```
 
 连续的非命名 token 会按空格拼成一个参数值（兼容 Sliver `execute-assembly` 等会拆掉引号的加载方式）。查询 Domain Admins 也可直接用预设：`da` / `domain-admins`。
 
 结果经 `Out-String` 输出到 stdout；错误写 stderr，失败返回非 0。
+
+## OPSEC / 安全默认
+
+默认行为面向更低噪声与更小误操作面（仍非「隐蔽工具」）：
+
+- **不**自动安装 RSAT；缺失模块时退出并提示 `--install-rsat`
+- 透传**默认拒绝写操作**；评估中的变更需显式 `--allow-write`
+- 推荐在**已预装** AD 模块的主机上使用：`--quiet --delay <ms>`，并优先窄查询（Filter / Identity），避免短时间连跑全量预设
+- `--max-results` 只截断**输出对象数**，不减少目录侧已发出的查询量
+- `--quiet -list` 仅打印预设名/别名，不打印用途描述
+
+```text
+SharpRsat.exe --quiet --delay 500 da
+SharpRsat.exe Get-ADUser -Filter "SamAccountName -eq 'support'" --max-results 20
+SharpRsat.exe --install-rsat Get-ADDomain
+```
 
 ## 侦察预设（recon）
 
@@ -135,29 +163,30 @@ SharpRsat.exe da
 
 ## 管理员权限与域环境
 
-### RSAT 自动安装
+### RSAT 安装（显式）
 
 启动透传或 recon 执行前，程序会检测 `ActiveDirectory` 模块：
 
-1. `Get-Module -ListAvailable ActiveDirectory` 已可用 → 跳过安装
-2. 缺失时按系统类型安装（需**提升权限**）：
+1. `Get-Module -ListAvailable ActiveDirectory` 已可用 → 继续
+2. 缺失且**未**指定 `--install-rsat` → 非 0 退出，提示该标志
+3. 缺失且指定 `--install-rsat`（需**提升权限**）时按系统类型安装：
    - **Server**：`Install-WindowsFeature RSAT-AD-PowerShell`
    - **Client**：`Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0`
-3. 安装或导入失败时，会提示权限 / 功能 / 重启等明确错误，并以非 0 退出
+4. 安装或导入失败时，会提示权限 / 功能 / 重启等明确错误，并以非 0 退出
 
-未提升权限时，若本机尚未安装 RSAT AD PowerShell，安装步骤会失败；已装好模块的普通域用户仍可做只读查询（权限取决于域 ACL）。
+已装好模块的普通域用户可做只读查询（权限取决于域 ACL），无需管理员。
 
 ### 域连通与凭据
 
 - 查询依赖当前登录（或令牌）身份对域的访问权限；无域凭据、离线或不在可达网络时，多数查询会失败或无结果
 - 部分高敏对象（如特权组）可能因 ACL 对低权限账户不可见
-- 本工具只做目录只读枚举，不请求票据、不抓哈希、不导出 BloodHound 图
+- recon 预设只做目录只读枚举，不请求票据、不抓哈希、不导出 BloodHound 图；写操作仅在 `--allow-write` 透传时可能发生
 
 ## 范围说明
 
 - 无 GUI；默认文本输出（无 JSON DTO）
 - 不封装 DNS / GPO MMC 等其它 RSAT 功能（GPO 仅通过 AD 对象查询）
-- 首版不含写操作类红队动作（如加组成员）
+- 默认不执行写操作；需 `--allow-write` 才放行 AD 模块中的变更类 cmdlet
 
 ## 许可与使用注意
 

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Text;
+using System.Threading;
 
 namespace SharpRsat
 {
@@ -24,6 +25,15 @@ namespace SharpRsat
             _runspace = runspace;
             _allowedCommands = allowedCommands;
         }
+
+        /// <summary>When false, non-read-only AD cmdlets are rejected.</summary>
+        public bool AllowWrite { get; set; }
+
+        /// <summary>Milliseconds to sleep before each PowerShell invoke (0 = none).</summary>
+        public int DelayMs { get; set; }
+
+        /// <summary>Max objects written to stdout (0 = unlimited).</summary>
+        public int MaxResults { get; set; }
 
         /// <summary>
         /// Opens a runspace, imports ActiveDirectory, and builds the exported-command whitelist.
@@ -103,6 +113,29 @@ namespace SharpRsat
         }
 
         /// <summary>
+        /// True for read-oriented AD cmdlets (Get-/Search-/Measure-/Test-/Find- prefixes
+        /// or known read-only names such as Sync-ADObject).
+        /// </summary>
+        public static bool IsReadOnlyCmdlet(string commandName)
+        {
+            if (string.IsNullOrWhiteSpace(commandName))
+            {
+                return false;
+            }
+
+            if (StartsWithOrdinalIgnoreCase(commandName, "Get-")
+                || StartsWithOrdinalIgnoreCase(commandName, "Search-")
+                || StartsWithOrdinalIgnoreCase(commandName, "Measure-")
+                || StartsWithOrdinalIgnoreCase(commandName, "Test-")
+                || StartsWithOrdinalIgnoreCase(commandName, "Find-"))
+            {
+                return true;
+            }
+
+            return string.Equals(commandName, "Sync-ADObject", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
         /// Invokes an AD module cmdlet. <paramref name="args"/>[0] is the cmdlet name;
         /// remaining tokens are named (-Name value / -Switch) or positional arguments.
         /// Writes formatted results to stdout and errors to stderr.
@@ -124,6 +157,12 @@ namespace SharpRsat
                 Console.Error.WriteLine(
                     "Command '{0}' is not an ActiveDirectory module command and is not allowed.",
                     cmdletName);
+                return 1;
+            }
+
+            if (!AllowWrite && !IsReadOnlyCmdlet(cmdletName))
+            {
+                Console.Error.WriteLine("Write operations require --allow-write.");
                 return 1;
             }
 
@@ -184,33 +223,36 @@ namespace SharpRsat
 
         private int InvokeAndWrite(PowerShell ps)
         {
-            ps.AddCommand("Out-String").AddParameter("Width", OutStringWidth);
+            ApplyDelay();
 
             try
             {
                 var results = ps.Invoke();
                 WriteErrors(ps);
 
+                var objects = new List<PSObject>();
                 if (results != null)
                 {
                     foreach (PSObject result in results)
                     {
-                        if (result == null)
+                        if (result != null)
                         {
-                            continue;
-                        }
-
-                        string text = result.ToString();
-                        if (!string.IsNullOrEmpty(text))
-                        {
-                            Console.Write(text);
-                            if (!text.EndsWith("\n", StringComparison.Ordinal) &&
-                                !text.EndsWith("\r", StringComparison.Ordinal))
-                            {
-                                Console.WriteLine();
-                            }
+                            objects.Add(result);
                         }
                     }
+                }
+
+                if (MaxResults > 0 && objects.Count > MaxResults)
+                {
+                    Console.Error.WriteLine(
+                        "Result truncated to {0} object(s); pass --max-results 0 for unlimited.",
+                        MaxResults);
+                    objects.RemoveRange(MaxResults, objects.Count - MaxResults);
+                }
+
+                if (objects.Count > 0)
+                {
+                    WriteFormatted(objects);
                 }
 
                 return ps.HadErrors ? 1 : 0;
@@ -221,6 +263,52 @@ namespace SharpRsat
                 Console.Error.WriteLine(ex.Message);
                 return 1;
             }
+        }
+
+        private void ApplyDelay()
+        {
+            if (DelayMs > 0)
+            {
+                Thread.Sleep(DelayMs);
+            }
+        }
+
+        private void WriteFormatted(IList<PSObject> objects)
+        {
+            using (PowerShell format = PowerShell.Create())
+            {
+                format.Runspace = _runspace;
+                format.AddCommand("Out-String").AddParameter("Width", OutStringWidth);
+                var formatted = format.Invoke(objects);
+                if (formatted == null)
+                {
+                    return;
+                }
+
+                foreach (PSObject result in formatted)
+                {
+                    if (result == null)
+                    {
+                        continue;
+                    }
+
+                    string text = result.ToString();
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        Console.Write(text);
+                        if (!text.EndsWith("\n", StringComparison.Ordinal) &&
+                            !text.EndsWith("\r", StringComparison.Ordinal))
+                        {
+                            Console.WriteLine();
+                        }
+                    }
+                }
+            }
+        }
+
+        private static bool StartsWithOrdinalIgnoreCase(string value, string prefix)
+        {
+            return value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

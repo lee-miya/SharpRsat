@@ -44,6 +44,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AdPowerShellHost.cs" />
+    <Compile Include="CliOptions.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Recon\ReconCatalog.cs" />
     <Compile Include="Recon\ReconCommand.cs" />

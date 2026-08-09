@@ -5,7 +5,7 @@ using System.IO;
 namespace SharpRsat.Recon
 {
     /// <summary>
-    /// Registry of red-team AD recon presets (read-only Get-AD* / LDAP queries).
+    /// Registry of directory recon presets (read-only Get-AD* / LDAP queries).
     /// </summary>
     internal static class ReconCatalog
     {
@@ -88,8 +88,17 @@ namespace SharpRsat.Recon
 
         /// <summary>
         /// Writes preset names (with aliases) and descriptions to <paramref name="writer"/>.
+        /// When <paramref name="quiet"/> is true, prints names/aliases only.
         /// </summary>
         public static void WriteList(TextWriter writer)
+        {
+            WriteList(writer, false);
+        }
+
+        /// <summary>
+        /// Writes preset names (with aliases) and optionally descriptions to <paramref name="writer"/>.
+        /// </summary>
+        public static void WriteList(TextWriter writer, bool quiet)
         {
             if (writer == null)
             {
@@ -104,7 +113,14 @@ namespace SharpRsat.Recon
                     label = cmd.Name + " (" + string.Join(", ", cmd.Aliases) + ")";
                 }
 
-                writer.WriteLine("{0,-36} {1}", label, cmd.Description);
+                if (quiet)
+                {
+                    writer.WriteLine(label);
+                }
+                else
+                {
+                    writer.WriteLine("{0,-36} {1}", label, cmd.Description);
+                }
             }
         }
 

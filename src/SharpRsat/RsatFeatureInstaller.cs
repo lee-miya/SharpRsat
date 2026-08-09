@@ -7,7 +7,7 @@ using Microsoft.Win32;
 namespace SharpRsat
 {
     /// <summary>
-    /// Detects the ActiveDirectory PowerShell module and installs RSAT when missing.
+    /// Detects the ActiveDirectory PowerShell module and optionally installs RSAT when missing.
     /// </summary>
     internal static class RsatFeatureInstaller
     {
@@ -16,11 +16,14 @@ namespace SharpRsat
         private const string ClientCapabilityName = "Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0";
 
         /// <summary>
-        /// Ensures the ActiveDirectory module is available, installing RSAT AD tools if needed.
+        /// Ensures the ActiveDirectory module is available. Installs RSAT only when
+        /// <paramref name="allowInstall"/> is true.
         /// </summary>
+        /// <param name="allowInstall">When false, missing module fails with a hint to use --install-rsat.</param>
+        /// <param name="quiet">When true, suppress install progress messages.</param>
         /// <param name="errorMessage">Human-readable failure reason when returning false.</param>
         /// <returns>True when the module is listable after ensure.</returns>
-        public static bool EnsureActiveDirectoryModule(out string errorMessage)
+        public static bool EnsureActiveDirectoryModule(bool allowInstall, bool quiet, out string errorMessage)
         {
             errorMessage = null;
 
@@ -29,10 +32,17 @@ namespace SharpRsat
                 return true;
             }
 
+            if (!allowInstall)
+            {
+                errorMessage =
+                    "ActiveDirectory module not found. Install RSAT AD PowerShell tools, or re-run with --install-rsat (requires Administrator).";
+                return false;
+            }
+
             if (!IsElevated())
             {
                 errorMessage =
-                    "ActiveDirectory module not found. Run elevated (Administrator) to install RSAT AD PowerShell tools.";
+                    "ActiveDirectory module not found. Run elevated (Administrator) with --install-rsat to install RSAT AD PowerShell tools.";
                 return false;
             }
 
@@ -47,10 +57,13 @@ namespace SharpRsat
 
             bool isServer = IsServerInstallation(installationType);
 
-            Console.Error.WriteLine(
-                "ActiveDirectory module not found. Installing RSAT AD PowerShell ({0}: {1})...",
-                isServer ? "Server feature" : "Client capability",
-                isServer ? ServerFeatureName : ClientCapabilityName);
+            if (!quiet)
+            {
+                Console.Error.WriteLine(
+                    "ActiveDirectory module not found. Installing RSAT AD PowerShell ({0}: {1})...",
+                    isServer ? "Server feature" : "Client capability",
+                    isServer ? ServerFeatureName : ClientCapabilityName);
+            }
 
             string installError;
             if (!TryInstallRsat(isServer, out installError))

@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("SharpRsat")]
-[assembly: AssemblyDescription("Active Directory RSAT PowerShell host and recon presets")]
+[assembly: AssemblyDescription("Active Directory PowerShell host")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("SharpRsat")]
